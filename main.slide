@@ -1,0 +1,225 @@
+Writing Microservices
+...without depending on a particular technology stack
+18:50 19 Apr 2018
+Tags: microservices, microservices, nodejs
+
+Alex Tan Hong Pin
+Developer Advocate, SeekAsia
+alextan220990@gmail.com
+https://github.com/alextanhongpin
+
+* What is our Goal
+
+Write _clean_ and _maintainable_ services that are independent on technology stack.
+
+- **clean*: those that are working on it understands it
+- **maintainable*: even after 5 years, it should be easy to understand and re-implement it in other technology stack
+
+* What is a Service?
+
+A _request/reply_ system that takes a *valid* request and returns a *valid* response (errors included).
+
+- performs business logic according to specification
+- should equate the Unix philosophy of "Do one thing and do it well"
+- multiple services can composed to perform more complex business logic (orchestration)
+- can be exposed to end-user through multiple _endpoints_ (HTTP, WebSocket, RPC, lambda, cron etc)
+
+
+* Lifecycle of a Service
+
+.image assets/lifecycle.png
+
+How does this translate to *code*?
+
+* Pseudo Code of Service
+
+  function JobService () {
+    async function create (params) {
+      // We construct a request by taking only the params we need
+      const request = params.id
+
+      // Validate the request (check null, length, etc)
+      const validRequest = validateRequest(request)
+
+      // Once the request is validated and there are no errors...
+      const response = await db.insert(validRequest)
+
+      // Ensure that the response does not contain sensitive information (password, credit card info etc)
+      const validResponse = validateResponse(response)
+      return validResponse
+    }
+
+    return { create }
+  }
+
+Usage:
+
+  const jobService = JobService()
+  jobService.create({ title: 'Engineer', location: 'KL', ...})
+
+* Example with Express
+
+  const express = require('express')
+  const app = express()
+
+  // Initialize service
+  const jobService = JobService()
+
+  app.post('/jobs', async (req, res) => {
+    try {
+      const response = await jobService.create(req.body)
+      res.status(200).json(response)
+    } catch (error) {
+      res.status(400).json({
+        error: 'BadRequest', 
+        code: 400,
+        message: error.message
+      })
+    }
+  })
+
+  app.listen(3000, () => console.log('listening to port *:3000. press ctrl + c to cancel'))
+
+* Example with lambda
+
+  // Initialize service
+  const jobService = JobService()
+
+  // new Node.js 8.10 runtime supports async/await
+  exports.handler = async (event) => {
+    try {
+      const response = await jobService.create(req.body)
+      return response
+    } catch (error) {
+      return error
+    }
+  }
+
+We can now write services without being dependent on a particular technology stack or even programming language.
+
+* Getting things right
+
+Validation is not an *option*, it is a *must* especially with JavaScript. 
+
+- basic type (string, integer, boolean, array, object)
+- advance type (datetime, email, ip, etc)
+- min/max string length
+- min/max number value
+- optional/required
+- operators (gt/lt/eq)
+- enums
+
+When working with large objects (more than 10 fields) however, this can be counter-productive...
+
+: for string (e.g. name cannot be more than 200 characters long)
+: for number (e.g. for limiting pagination, ensuring salary cannot be less than zero)
+: for enums (e.g. must match one of the country code in the list)
+
+* JSON Schema (part 1)
+
+Language-agnostic, dependable way of validating your schema.
+
+  {
+    "title": "Person",
+    "type": "object",
+    "properties": {
+        "firstName": {
+            "type": "string"
+        },
+        "lastName": {
+            "type": "string"
+        },
+        "age": {
+            "description": "Age in years",
+            "type": "integer",
+            "minimum": 0
+        }
+    },
+    "required": ["firstName", "lastName"]
+  }
+
+* JSON Schema (part 2)
+
+Composable to form deeply nested schemas (beware though...):
+
+  {
+    "title": "People",
+    "type": "array",
+    "items": {"$ref": "person.json" }
+  }
+
+* JSON Schema (part 3)
+
+Other useful features:
+
+- serve as a living documentation
+- extremely fast
+- able to coerce type (string to number)
+- remove fields that are not defined in schema (prevent others from injecting unwanted params!)
+- handles types for JavaScript (e.g. limit/offset should be integer, not float!)
+- validate enums (e.g. currency must be either MYR, SGD, EUR)
+- reduce LOC (try validating an object with 40+ fields)
+- reusable in other languages
+
+
+* Schema.org
+
+A structured data markup schema supported by major search engines. 
+
+"Schema markup is especially important in the age of _Hummingbird_ and _RankBrain_. How a search engine interprets the context of a query will determine the quality of a search result. Schema can provide context to an otherwise ambiguous webpage."
+
+Example:
+
+.link http://schema.org/JobPosting JobPosting Schema
+
+: Design your schema according to schema.org
+
+* Useful Tips (part 1)
+
+- Checking nested objects
+  
+  // Deeply nested object
+  const a = {
+    b: {
+      c: {
+        d: {
+          e: 0
+        }
+      }
+    }
+  }
+  // Bad
+  > .a.b.z
+  TypeError: Cannot read property 'x' of undefined
+
+  // Access each levels individually, should fail safely
+  > a && a.b && a.b.c && a.b.c.d && a.b.c.d.z
+  undefined
+
+* Useful Tips (part 2)
+
+- Store datetime in UTC string based on RFC3339:
+
+  > new Date().toString()
+  "Thu Apr 26 2018 05:31:42 GMT+0800 (+08)"
+
+  > new Date().toISOString()
+  "2018-04-25T21:31:54.009Z"
+
+- Trim strings before saving
+
+  > const name = 'John Doe '
+  > name.trim()
+  'John Doe'
+  
+- Refer to schema.org for reference
+- Use JSON Schema for validation
+- Isolate read/write
+- use Standard JS for linter
+
+
+* Reference
+
+.link www.schema.org schema.org
+.link http://json-schema.org/ json-schema.org
+.link https://github.com/seekasia/engineering-principles/blob/master/nodejs.md Installing StandardJS

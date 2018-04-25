@@ -1,0 +1,13 @@
+digraph G {
+  label = "Figure 1: Lifecycle of a Service"
+  compound = true;
+  rankdir = LR
+
+  User -> struct1 [label = Request] 
+  struct1 -> User [label = Response];
+ 
+  subgraph cluster_0 {
+   label = "Service"
+   struct1 [shape=record,label="{ {Validate Request | Perform Business Logic | Validate Response }}"];
+  } 
+}
